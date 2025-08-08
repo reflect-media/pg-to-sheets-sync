@@ -1,3 +1,23 @@
+@app.route("/", methods=["GET"])
+def sync_data():
+    import time
+    print("START: sync_data called", flush=True)
+    start = time.time()
+    try:
+        print("Trying to connect to PostgreSQL...", flush=True)
+        conn = psycopg2.connect(
+            host='rtngplsadmin40.data-driven.media',
+            port=5432,
+            dbname='clients_managment',
+            user='looker_mediaforest',
+            password=os.environ['PG_PASS']
+        )
+        print("Connected to PostgreSQL", flush=True)
+    except Exception as e:
+        print("FAILED TO CONNECT TO POSTGRESQL:", str(e), flush=True)
+        raise
+
+
 from flask import Flask, request
 import psycopg2
 import gspread
