@@ -1,3 +1,14 @@
+from flask import Flask, request
+import psycopg2
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from google.cloud import secretmanager
+import os
+import json
+import tempfile
+
+app = Flask(__name__)
+
 @app.route("/", methods=["GET"])
 def sync_data():
     import time
@@ -17,17 +28,6 @@ def sync_data():
         print("FAILED TO CONNECT TO POSTGRESQL:", str(e), flush=True)
         raise
 
-
-from flask import Flask, request
-import psycopg2
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from google.cloud import secretmanager
-import os
-import json
-import tempfile
-
-app = Flask(__name__)
 
 def get_secret(secret_id, project_id):
     client = secretmanager.SecretManagerServiceClient()
