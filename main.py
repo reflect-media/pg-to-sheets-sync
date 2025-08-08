@@ -4,16 +4,22 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from google.cloud import secretmanager
 import os
-import json
 import tempfile
 
 app = Flask(__name__)
+
+def get_secret(secret_id, project_id):
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
+    response = client.access_secret_version(request={"name": name})
+    return response.payload.data.decode("UTF-8")
 
 @app.route("/", methods=["GET"])
 def sync_data():
     import time
     print("START: sync_data called", flush=True)
     start = time.time()
+    # חיבור ל-PostgreSQL
     try:
         print("Trying to connect to PostgreSQL...", flush=True)
         conn = psycopg2.connect(
@@ -28,23 +34,6 @@ def sync_data():
         print("FAILED TO CONNECT TO POSTGRESQL:", str(e), flush=True)
         raise
 
-
-def get_secret(secret_id, project_id):
-    client = secretmanager.SecretManagerServiceClient()
-    name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
-    response = client.access_secret_version(request={"name": name})
-    return response.payload.data.decode("UTF-8")
-
-@app.route("/", methods=["GET"])
-def sync_data():
-    # חיבור ל-PostgreSQL
-    conn = psycopg2.connect(
-        host='rtngplsadmin40.data-driven.media',
-        port=5432,
-        dbname='clients_managment',
-        user='looker_mediaforest',
-        password=os.environ['PG_PASS']
-    )
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM campaign_summary_last_7_days_new")
     rows = cursor.fetchall()
@@ -71,6 +60,7 @@ def sync_data():
     sheet.insert_row(headers, 2)
     sheet.insert_rows(rows, 3)
 
+    print(f"SUCCESS - Time: {time.time() - start:.1f} seconds", flush=True)
     return "Success", 200
 
 if __name__ == "__main__":
