@@ -19,9 +19,9 @@ def sync_data():
     import time
     print("START: sync_data called", flush=True)
     start = time.time()
-    # חיבור ל-PostgreSQL
+
+    # התחברות ל-PostgreSQL
     try:
-        print("Trying to connect to PostgreSQL...", flush=True)
         conn = psycopg2.connect(
             host='rtngplsadmin40.data-driven.media',
             port=5432,
@@ -29,10 +29,9 @@ def sync_data():
             user='looker_mediaforest',
             password=os.environ['PG_PASS']
         )
-        print("Connected to PostgreSQL", flush=True)
     except Exception as e:
         print("FAILED TO CONNECT TO POSTGRESQL:", str(e), flush=True)
-        raise
+        return f"DB error: {str(e)}", 500
 
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM campaign_summary_last_7_days_new")
@@ -41,7 +40,7 @@ def sync_data():
     cursor.close()
     conn.close()
 
-    # קבלת קובץ credentials מה-Secret Manager ושמירה זמנית
+    # שליפת credentials מה-Secret Manager ושמירה זמנית
     creds_json = get_secret("pg-to-sheets-sync-23f33d00064e", "426302689818")
     with tempfile.NamedTemporaryFile("w+", delete=False) as temp:
         temp.write(creds_json)
