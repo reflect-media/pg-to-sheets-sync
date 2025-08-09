@@ -27,7 +27,6 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 @app.route("/test-db", methods=["GET"])
-@app.route("/test-db", methods=["GET"])
 def test_db():
     try:
         conn = psycopg2.connect(
@@ -40,23 +39,39 @@ def test_db():
         )
         cursor = conn.cursor()
         
-        # בדיקת טבלאות campaign זמינות
+        # חיפוש כל הטבלאות/views הזמינות
         cursor.execute("""
             SELECT table_name, table_type 
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
-            AND table_name LIKE '%campaign%'
             ORDER BY table_name;
         """)
         
-        available_tables = cursor.fetchall()
+        all_tables = cursor.fetchall()
+        
+        # חיפוש ספציפי לטבלאות עם נתונים רלוונטיים
+        cursor.execute("""
+            SELECT table_name, table_type 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND (table_name LIKE '%campaign%' 
+                 OR table_name LIKE '%summary%'
+                 OR table_name LIKE '%data%'
+                 OR table_name LIKE '%report%')
+            ORDER BY table_name;
+        """)
+        
+        relevant_tables = cursor.fetchall()
         
         cursor.close()
         conn.close()
         
         return jsonify({
-            "status": "db_connected", 
-            "available_campaign_tables": available_tables,
+            "status": "db_connected",
+            "total_tables_count": len(all_tables),
+            "all_tables": all_tables[:20],  # רק 20 הראשונות
+            "relevant_tables": relevant_tables,
+            "target_table": "campaign_summary_last_7_days_new",
             "current_user": "looker_mediaforest"
         }), 200
         
