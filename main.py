@@ -27,6 +27,7 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 @app.route("/test-db", methods=["GET"])
+@app.route("/test-db", methods=["GET"])
 def test_db():
     try:
         conn = psycopg2.connect(
@@ -38,11 +39,27 @@ def test_db():
             connect_timeout=10
         )
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM campaign_summary_last_7_days_new")
-        count = cursor.fetchone()[0]
+        
+        # בדיקת טבלאות campaign זמינות
+        cursor.execute("""
+            SELECT table_name, table_type 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name LIKE '%campaign%'
+            ORDER BY table_name;
+        """)
+        
+        available_tables = cursor.fetchall()
+        
         cursor.close()
         conn.close()
-        return jsonify({"status": "db_ok", "row_count": count}), 200
+        
+        return jsonify({
+            "status": "db_connected", 
+            "available_campaign_tables": available_tables,
+            "current_user": "looker_mediaforest"
+        }), 200
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
