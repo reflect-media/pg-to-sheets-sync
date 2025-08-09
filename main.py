@@ -124,6 +124,17 @@ def sync_data():
     except Exception as e:
         logger.error(f"ERROR: {str(e)}")
         return jsonify({"error": str(e)}), 500
+@app.route("/test-ip", methods=["GET"])
+def test_ip():
+    try:
+        import requests
+        response = requests.get('https://httpbin.org/ip', timeout=10)
+        return jsonify({
+            "external_ip": response.json(),
+            "vpc_connector": "pg-sheets-connector status unknown"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
