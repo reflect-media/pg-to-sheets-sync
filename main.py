@@ -6,7 +6,6 @@ from google.cloud import secretmanager
 import os
 import tempfile
 import logging
-import gc
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ def sync_data():
     start = time.time()
     
     try:
-        logger.info("=== START SYNC ===")
+        logger.info("=== START SYNC (LIMITED) ===")
         
         # חיבור ל-PostgreSQL
         conn = psycopg2.connect(
@@ -62,11 +61,12 @@ def sync_data():
             dbname='clients_managment',
             user='looker_mediaforest',
             password=os.environ['PG_PASS'],
-            connect_timeout=15
+            connect_timeout=10
         )
         
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM campaign_summary_last_7_days_new LIMIT 2000")
+        # הגבלה קפדנית לחיסכון בזיכרון
+        cursor.execute("SELECT * FROM campaign_summary_last_7_days_new LIMIT 500")
         
         rows = cursor.fetchall()
         headers = [desc[0] for desc in cursor.description]
@@ -75,7 +75,7 @@ def sync_data():
         
         logger.info(f"Fetched {len(rows)} rows")
         
-        # Google Sheets
+        # Google Sheets - מאופטמל לזיכרון
         creds_json = get_secret("pg-to-sheets-sync-23f33d00064e", "426302689818")
         
         with tempfile.NamedTemporaryFile("w+", delete=False, suffix='.json') as temp:
@@ -88,21 +88,28 @@ def sync_data():
         client = gspread.authorize(creds)
         sheet = client.open("קמפיינים יומיים מבסיס נתוני רייטינג פלוס v24.7.25.13.07").sheet1
         
+        # ניקוי וכתיבה בחלקים קטנים
         sheet.clear()
         sheet.insert_row(headers, 1)
         
         if rows:
-            batch_size = 100
+            # באצ'ים קטנים של 50 שורות
+            batch_size = 50
             for i in range(0, len(rows), batch_size):
                 batch = rows[i:i+batch_size]
+                # המרה לרשימות (חיסכון בזיכרון)
                 batch_lists = [list(row) for row in batch]
                 sheet.insert_rows(batch_lists, i + 2)
-                logger.info(f"Inserted batch {i//batch_size + 1}")
-                time.sleep(0.1)
+                logger.info(f"Inserted batch {i//batch_size + 1}/{(len(rows)-1)//batch_size + 1}")
+                # מנוחה קצרה
+                time.sleep(0.2)
+                
+                # ניקוי זיכרון בכל באץ'
+                del batch_lists
         
+        # ניקוי
         os.unlink(temp_name)
-        del rows
-        gc.collect()
+        del rows, creds_json
         
         duration = time.time() - start
         logger.info(f"SUCCESS! Time: {duration:.1f}s")
@@ -110,7 +117,8 @@ def sync_data():
         return jsonify({
             "status": "success",
             "rows_processed": len(headers) if headers else 0,
-            "duration": f"{duration:.1f}s"
+            "duration": f"{duration:.1f}s",
+            "note": "Limited to 500 rows for memory optimization"
         }), 200
         
     except Exception as e:
@@ -119,4 +127,5 @@ def sync_data():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # הגדרות חיסכון בזיכרון
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=False)
