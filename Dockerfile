@@ -2,6 +2,8 @@ FROM python:3.10-slim
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+# הגדרת זיכרון Python מוגבל
+ENV PYTHONHASHSEED=0
 
 WORKDIR /app
 
@@ -13,4 +15,5 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["python", "main.py"]
+# הרצה עם הגדרות זיכרון מוגבלות
+CMD ["python", "-O", "main.py"]
