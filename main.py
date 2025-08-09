@@ -39,7 +39,17 @@ def test_db():
         )
         cursor = conn.cursor()
         
-        # חיפוש כל הטבלאות/views הזמינות
+        # בדיקת Materialized Views ספציפית
+        cursor.execute("""
+            SELECT schemaname, matviewname, matviewowner, ispopulated
+            FROM pg_matviews 
+            WHERE schemaname = 'public'
+            ORDER BY matviewname;
+        """)
+        
+        materialized_views = cursor.fetchall()
+        
+        # בדיקת טבלאות רגילות
         cursor.execute("""
             SELECT table_name, table_type 
             FROM information_schema.tables 
@@ -47,31 +57,25 @@ def test_db():
             ORDER BY table_name;
         """)
         
-        all_tables = cursor.fetchall()
+        regular_tables = cursor.fetchall()
         
-        # חיפוש ספציפי לטבלאות עם נתונים רלוונטיים
-        cursor.execute("""
-            SELECT table_name, table_type 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND (table_name LIKE '%campaign%' 
-                 OR table_name LIKE '%summary%'
-                 OR table_name LIKE '%data%'
-                 OR table_name LIKE '%report%')
-            ORDER BY table_name;
-        """)
-        
-        relevant_tables = cursor.fetchall()
+        # ניסיון לגשת לטבלה הספציפית
+        mv_access_test = None
+        try:
+            cursor.execute("SELECT COUNT(*) FROM campaign_summary_last_7_days_new LIMIT 1")
+            count = cursor.fetchone()[0]
+            mv_access_test = {"status": "accessible", "count": count}
+        except Exception as e:
+            mv_access_test = {"status": "error", "message": str(e)}
         
         cursor.close()
         conn.close()
         
         return jsonify({
             "status": "db_connected",
-            "total_tables_count": len(all_tables),
-            "all_tables": all_tables[:20],  # רק 20 הראשונות
-            "relevant_tables": relevant_tables,
-            "target_table": "campaign_summary_last_7_days_new",
+            "materialized_views": materialized_views,
+            "regular_tables": regular_tables,
+            "target_mv_test": mv_access_test,
             "current_user": "looker_mediaforest"
         }), 200
         
