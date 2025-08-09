@@ -136,6 +136,41 @@ def test_ip():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/test-permissions", methods=["GET"])
+def test_permissions():
+    try:
+        conn = psycopg2.connect(
+            host='rtngplsadmin40.data-driven.media',
+            port=5432,
+            dbname='clients_managment',
+            user='looker_mediaforest',
+            password=os.environ.get('PG_PASS', ''),
+            connect_timeout=10
+        )
+        cursor = conn.cursor()
+        
+        # בדיקת הרשאות
+        cursor.execute("""
+            SELECT grantee, table_name, privilege_type
+            FROM information_schema.role_table_grants 
+            WHERE grantee = 'looker_mediaforest'
+            AND table_name LIKE '%campaign%'
+            ORDER BY table_name;
+        """)
+        
+        permissions = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "permissions_check",
+            "user_permissions": permissions
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     # הגדרות חיסכון בזיכרון
