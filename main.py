@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import datetime
 import psycopg2
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -31,12 +32,13 @@ def health_check():
 @app.route("/", methods=["GET"])
 def sync_data():
     import time
+    import datetime
     start = time.time()
     
     try:
         logger.info("=== START FULL SYNC ===")
         
-        # חיבור ל-PostgreSQL (עובד!)
+        # חיבור ל-PostgreSQL
         conn = psycopg2.connect(
             host='rtngplsadmin40.data-driven.media',
             port=5432,
@@ -49,54 +51,35 @@ def sync_data():
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM campaign_summary_last_7_days_new LIMIT 1000")
         
-        rows = cursor.fetchall()
+        raw_rows = cursor.fetchall()
         headers = [desc[0] for desc in cursor.description]
+        
+        # המרת תאריכים לטקסט
+        rows = []
+        for row in raw_rows:
+            converted_row = []
+            for item in row:
+                if isinstance(item, (datetime.date, datetime.datetime)):
+                    converted_row.append(str(item))
+                elif item is None:
+                    converted_row.append("")
+                else:
+                    converted_row.append(item)
+            rows.append(converted_row)
+        
         cursor.close()
         conn.close()
         
         logger.info(f"✅ Fetched {len(rows)} rows from PostgreSQL")
         
-        # Google Sheets - עם Environment Variable
-        try:
-            # ניסיון לקבל credentials מ-environment variable
-            if 'GOOGLE_CREDS_JSON' in os.environ:
-                import json
-                from google.oauth2 import service_account
-                
-                creds_dict = json.loads(os.environ['GOOGLE_CREDS_JSON'])
-                credentials = service_account.Credentials.from_service_account_info(
-                    creds_dict, 
-                    scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-                )
-                client = gspread.authorize(credentials)
-                logger.info("✅ Using Environment Variable for Google Sheets")
-                
-            else:
-                # fallback למקורי (Secret Manager)
-                creds_json = get_secret("pg-to-sheets-sync-23f33d00064e", "426302689818")
-                
-                with tempfile.NamedTemporaryFile("w+", delete=False, suffix='.json') as temp:
-                    temp.write(creds_json)
-                    temp.flush()
-                    temp_name = temp.name
-                
-                scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-                creds = ServiceAccountCredentials.from_json_keyfile_name(temp_name, scope)
-                client = gspread.authorize(creds)
-                os.unlink(temp_name)
-                logger.info("✅ Using Secret Manager for Google Sheets")
-                
-        except Exception as sheets_error:
-            return jsonify({
-                "status": "partial_success",
-                "postgresql": "OK",
-                "rows_fetched": len(rows),
-                "google_sheets": "FAILED",
-                "sheets_error": str(sheets_error),
-                "solution": "Add GOOGLE_CREDS_JSON environment variable"
-            }), 200
+        # Google Sheets - קוד קיים...
+        creds_dict = json.loads(os.environ['GOOGLE_CREDS_JSON'])
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict, 
+            scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        )
+        client = gspread.authorize(credentials)
         
-        # עדכון Google Sheets
         sheet = client.open("קמפיינים יומיים מבסיס נתוני רייטינג פלוס v24.7.25.13.07").sheet1
         
         sheet.clear()
@@ -106,8 +89,7 @@ def sync_data():
             batch_size = 100
             for i in range(0, len(rows), batch_size):
                 batch = rows[i:i+batch_size]
-                batch_lists = [list(row) for row in batch]
-                sheet.insert_rows(batch_lists, i + 2)
+                sheet.insert_rows(batch, i + 2)
                 logger.info(f"✅ Inserted batch {i//batch_size + 1}")
                 time.sleep(0.1)
         
@@ -116,8 +98,6 @@ def sync_data():
         
         return jsonify({
             "status": "🎉 COMPLETE SUCCESS!",
-            "postgresql": "OK",
-            "google_sheets": "OK",
             "rows_processed": len(rows),
             "duration": f"{duration:.1f}s",
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
