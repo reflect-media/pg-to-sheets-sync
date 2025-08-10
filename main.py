@@ -207,6 +207,41 @@ def test_permissions():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/test-simple", methods=["GET"])
+def test_simple():
+    try:
+        conn = psycopg2.connect(
+            host='rtngplsadmin40.data-driven.media',
+            port=5432,
+            dbname='clients_managment',
+            user='looker_mediaforest',
+            password=os.environ.get('PG_PASS', ''),
+            connect_timeout=10
+        )
+        cursor = conn.cursor()
+        
+        # בדיקת גישה לטבלה הרצויה
+        cursor.execute("SELECT COUNT(*) FROM campaign_summary_last_7_days_new")
+        count = cursor.fetchone()[0]
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "SUCCESS! Everything works!",
+            "connection": "OK",
+            "table_access": "OK", 
+            "row_count": count,
+            "user": "looker_mediaforest"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+            "test": "after_permissions_fix"
+        }), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     # הגדרות חיסכון בזיכרון
