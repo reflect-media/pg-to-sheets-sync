@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-import pytz
 import psycopg2
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -10,6 +9,8 @@ import logging
 import json
 from google.oauth2 import service_account
 import datetime
+import decimal
+import pytz
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,7 +34,6 @@ def health_check():
 @app.route("/", methods=["GET"])
 def sync_data():
     import time
-    import datetime
     start = time.time()
     
     try:
@@ -56,7 +56,6 @@ def sync_data():
         headers = [desc[0] for desc in cursor.description]
         
         # המרת תאריכים ומספרים עשרוניים לטקסט
-        import decimal
         rows = []
         for row in raw_rows:
             converted_row = []
@@ -89,18 +88,29 @@ def sync_data():
         # ניקוי הגיליון
         sheet.clear()
         
-        # יצירת שורת מידע מעוצבת
-        current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        # יצירת שורת מידע מעוצבת עם אזור זמן ישראלי
+        israel_tz = pytz.timezone('Asia/Jerusalem')
+        current_time = datetime.datetime.now(israel_tz).strftime("%d/%m/%Y %H:%M:%S")
         info_row = [
             f"מקור: PostgreSQL | טבלה: campaign_summary_last_7_days_new | עודכן: {current_time} | שורות: {len(rows)} | סטטוס: הסנכרון הושלם בהצלחה"
         ]
         
-        # הוספת שורת המידע בשורה 1
-        sheet.insert_row(info_row, 1)
+        # יצירת נתונים מלאים לעדכון יחיד
+        all_data = [info_row, headers] + rows
         
-        # עיצוב שורת המידע
+        # עדכון הגיליון בפעולה אחת
+        if len(headers) <= 26:  # A-Z
+            end_col = chr(ord('A') + len(headers) - 1)
+        else:  # יותר מ-26 עמודות
+            end_col = 'Z'
+        
+        end_row = len(all_data)
+        sheet.update(f'A1:{end_col}{end_row}', all_data)
+        
+        logger.info(f"✅ Updated sheet with {len(rows)} rows + headers in single operation")
+        
+        # עיצוב שורת המידע (שורה 1)
         try:
-            # הגדרת עיצוב לשורה 1
             sheet.format('A1:Z1', {
                 'backgroundColor': {
                     'red': 0.8,
@@ -114,17 +124,13 @@ def sync_data():
                 'horizontalAlignment': 'LEFT'
             })
             
-            # מיזוג תאים בשורה 1 (A1 עד עמודה אחרונה)
-            end_col = chr(ord('A') + len(headers) - 1)  # חישוב העמודה האחרונה
+            # מיזוג תאים בשורה 1
             sheet.merge_cells(f'A1:{end_col}1')
             
         except Exception as format_error:
             logger.warning(f"Format error (non-critical): {format_error}")
         
-        # הוספת כותרות בשורה 2
-        sheet.insert_row(headers, 2)
-        
-        # עיצוב שורת הכותרות
+        # עיצוב שורת הכותרות (שורה 2)
         try:
             sheet.format('A2:Z2', {
                 'backgroundColor': {
@@ -139,16 +145,6 @@ def sync_data():
             })
         except Exception as format_error:
             logger.warning(f"Header format error (non-critical): {format_error}")
-        
-        # הוספת הנתונים החל משורה 3
-        if rows:
-            batch_size = 100
-            for i in range(0, len(rows), batch_size):
-                batch = rows[i:i+batch_size]
-                start_row = i + 3  # מתחיל משורה 3
-                sheet.insert_rows(batch, start_row)
-                logger.info(f"✅ Inserted batch {i//batch_size + 1}: rows {start_row} to {start_row + len(batch) - 1}")
-                time.sleep(0.1)
         
         duration = time.time() - start
         logger.info(f"🎉 COMPLETE SUCCESS! Time: {duration:.1f}s")
@@ -169,7 +165,6 @@ def sync_data():
 def sync_table2():
     """סנכרון טבלה campaign_summary_rating_plus_delivery לגיליון CampaignsFullData"""
     import time
-    import datetime
     start = time.time()
     
     try:
@@ -192,7 +187,6 @@ def sync_table2():
         headers = [desc[0] for desc in cursor.description]
         
         # המרת תאריכים ומספרים עשרוניים לטקסט
-        import decimal
         rows = []
         for row in raw_rows:
             converted_row = []
@@ -226,18 +220,29 @@ def sync_table2():
         # ניקוי הגיליון
         sheet.clear()
         
-        # יצירת שורת מידע מעוצבת
-        current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        # יצירת שורת מידע מעוצבת עם אזור זמן ישראלי
+        israel_tz = pytz.timezone('Asia/Jerusalem')
+        current_time = datetime.datetime.now(israel_tz).strftime("%d/%m/%Y %H:%M:%S")
         info_row = [
             f"מקור: PostgreSQL | טבלה: campaign_summary_rating_plus_delivery | עודכן: {current_time} | שורות: {len(rows)} | סטטוס: הסנכרון הושלם בהצלחה"
         ]
         
-        # הוספת שורת המידע בשורה 1
-        sheet.insert_row(info_row, 1)
+        # יצירת נתונים מלאים לעדכון יחיד
+        all_data = [info_row, headers] + rows
         
-        # עיצוב שורת המידע
+        # עדכון הגיליון בפעולה אחת
+        if len(headers) <= 26:  # A-Z
+            end_col = chr(ord('A') + len(headers) - 1)
+        else:  # יותר מ-26 עמודות
+            end_col = 'Z'
+        
+        end_row = len(all_data)
+        sheet.update(f'A1:{end_col}{end_row}', all_data)
+        
+        logger.info(f"✅ Updated CampaignsFullData sheet with {len(rows)} rows in single operation")
+        
+        # עיצוב שורת המידע (שורה 1) - רקע ירוק בהיר
         try:
-            # הגדרת עיצוב לשורה 1 - רקע ירוק בהיר לגיליון השני
             sheet.format('A1:Z1', {
                 'backgroundColor': {
                     'red': 0.8,
@@ -252,16 +257,12 @@ def sync_table2():
             })
             
             # מיזוג תאים בשורה 1
-            end_col = chr(ord('A') + len(headers) - 1)
             sheet.merge_cells(f'A1:{end_col}1')
             
         except Exception as format_error:
             logger.warning(f"Format error (non-critical): {format_error}")
         
-        # הוספת כותרות בשורה 2
-        sheet.insert_row(headers, 2)
-        
-        # עיצוב שורת הכותרות
+        # עיצוב שורת הכותרות (שורה 2)
         try:
             sheet.format('A2:Z2', {
                 'backgroundColor': {
@@ -276,16 +277,6 @@ def sync_table2():
             })
         except Exception as format_error:
             logger.warning(f"Header format error (non-critical): {format_error}")
-        
-        # הוספת הנתונים החל משורה 3
-        if rows:
-            batch_size = 100
-            for i in range(0, len(rows), batch_size):
-                batch = rows[i:i+batch_size]
-                start_row = i + 3
-                sheet.insert_rows(batch, start_row)
-                logger.info(f"✅ Inserted batch {i//batch_size + 1}: rows {start_row} to {start_row + len(batch) - 1}")
-                time.sleep(0.1)
         
         duration = time.time() - start
         logger.info(f"🎉 TABLE2 SYNC SUCCESS! Time: {duration:.1f}s")
@@ -371,11 +362,15 @@ def sync_all():
     # ספירת הצלחות
     success_count = len([r for r in results if r["status"] == "success"])
     
+    # זמן ישראלי לתוצאה
+    israel_tz = pytz.timezone('Asia/Jerusalem')
+    timestamp = datetime.datetime.now(israel_tz).strftime("%d/%m/%Y %H:%M:%S")
+    
     return jsonify({
         "status": f"🎯 SYNC ALL COMPLETED! {success_count}/{len(results)} successful",
         "total_duration": f"{total_duration:.1f}s",
         "sync_results": results,
-        "timestamp": time.strftime("%d/%m/%Y %H:%M:%S")
+        "timestamp": timestamp
     }), 200
 
 if __name__ == "__main__":
