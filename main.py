@@ -72,7 +72,7 @@ def sync_data():
         
         logger.info(f"✅ Fetched {len(rows)} rows from PostgreSQL")
         
-        # Google Sheets - קוד קיים...
+        # Google Sheets
         creds_dict = json.loads(os.environ['GOOGLE_CREDS_JSON'])
         credentials = service_account.Credentials.from_service_account_info(
             creds_dict, 
@@ -82,15 +82,68 @@ def sync_data():
         
         sheet = client.open("קמפיינים יומיים מבסיס נתוני רייטינג פלוס v24.7.25.13.07").sheet1
         
+        # ניקוי הגיליון
         sheet.clear()
-        sheet.insert_row(headers, 1)
         
+        # יצירת שורת מידע מעוצבת
+        current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        info_row = [
+            f"מקור: PostgreSQL | טבלה: campaign_summary_last_7_days_new | עודכן: {current_time} | שורות: {len(rows)} | סטטוס: הסנכרון הושלם בהצלחה"
+        ]
+        
+        # הוספת שורת המידע בשורה 1
+        sheet.insert_row(info_row, 1)
+        
+        # עיצוב שורת המידע
+        try:
+            # הגדרת עיצוב לשורה 1
+            sheet.format('A1:Z1', {
+                'backgroundColor': {
+                    'red': 0.8,
+                    'green': 0.9,
+                    'blue': 1.0
+                },
+                'textFormat': {
+                    'bold': True,
+                    'fontSize': 11
+                },
+                'horizontalAlignment': 'LEFT'
+            })
+            
+            # מיזוג תאים בשורה 1 (A1 עד עמודה אחרונה)
+            end_col = chr(ord('A') + len(headers) - 1)  # חישוב העמודה האחרונה
+            sheet.merge_cells(f'A1:{end_col}1')
+            
+        except Exception as format_error:
+            logger.warning(f"Format error (non-critical): {format_error}")
+        
+        # הוספת כותרות בשורה 2
+        sheet.insert_row(headers, 2)
+        
+        # עיצוב שורת הכותרות
+        try:
+            sheet.format('A2:Z2', {
+                'backgroundColor': {
+                    'red': 0.9,
+                    'green': 0.9,
+                    'blue': 0.9
+                },
+                'textFormat': {
+                    'bold': True,
+                    'fontSize': 10
+                }
+            })
+        except Exception as format_error:
+            logger.warning(f"Header format error (non-critical): {format_error}")
+        
+        # הוספת הנתונים החל משורה 3
         if rows:
             batch_size = 100
             for i in range(0, len(rows), batch_size):
                 batch = rows[i:i+batch_size]
-                sheet.insert_rows(batch, i + 2)
-                logger.info(f"✅ Inserted batch {i//batch_size + 1}")
+                start_row = i + 3  # מתחיל משורה 3
+                sheet.insert_rows(batch, start_row)
+                logger.info(f"✅ Inserted batch {i//batch_size + 1}: rows {start_row} to {start_row + len(batch) - 1}")
                 time.sleep(0.1)
         
         duration = time.time() - start
@@ -100,7 +153,8 @@ def sync_data():
             "status": "🎉 COMPLETE SUCCESS!",
             "rows_processed": len(rows),
             "duration": f"{duration:.1f}s",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": current_time,
+            "info_row": info_row[0]
         }), 200
         
     except Exception as e:
