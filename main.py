@@ -54,13 +54,16 @@ def sync_data():
         raw_rows = cursor.fetchall()
         headers = [desc[0] for desc in cursor.description]
         
-        # המרת תאריכים לטקסט
+        # המרת תאריכים ומספרים עשרוניים לטקסט
+        import decimal
         rows = []
         for row in raw_rows:
             converted_row = []
             for item in row:
                 if isinstance(item, (datetime.date, datetime.datetime)):
                     converted_row.append(str(item))
+                elif isinstance(item, decimal.Decimal):
+                    converted_row.append(float(item))
                 elif item is None:
                     converted_row.append("")
                 else:
@@ -187,13 +190,16 @@ def sync_table2():
         raw_rows = cursor.fetchall()
         headers = [desc[0] for desc in cursor.description]
         
-        # המרת תאריכים לטקסט
+        # המרת תאריכים ומספרים עשרוניים לטקסט
+        import decimal
         rows = []
         for row in raw_rows:
             converted_row = []
             for item in row:
                 if isinstance(item, (datetime.date, datetime.datetime)):
                     converted_row.append(str(item))
+                elif isinstance(item, decimal.Decimal):
+                    converted_row.append(float(item))
                 elif item is None:
                     converted_row.append("")
                 else:
