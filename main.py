@@ -98,16 +98,10 @@ def sync_data():
         # יצירת נתונים מלאים לעדכון יחיד
         all_data = [info_row, headers] + rows
         
-        # עדכון הגיליון בפעולה אחת
-        if len(headers) <= 26:  # A-Z
-            end_col = chr(ord('A') + len(headers) - 1)
-        else:  # יותר מ-26 עמודות
-            end_col = 'Z'
+        # עדכון הגיליון בפעולה אחת - אוטומטי לכל כמות עמודות
+        sheet.update('A1', all_data)
         
-        end_row = len(all_data)
-        sheet.update(f'A1:{end_col}{end_row}', all_data)
-        
-        logger.info(f"✅ Updated sheet with {len(rows)} rows + headers in single operation")
+        logger.info(f"✅ Updated sheet with {len(rows)} rows and {len(headers)} columns")
         
         # עיצוב שורת המידע (שורה 1)
         try:
@@ -130,9 +124,9 @@ def sync_data():
         except Exception as format_error:
             logger.warning(f"Format error (non-critical): {format_error}")
         
-        # עיצוב שורת הכותרות (שורה 2)
-        try:
-            sheet.format('A2:Z2', {
+            # עיצוב שורת הכותרות (שורה 2)
+            format_range = f'A2:{end_col}2'
+            sheet.format(format_range, {
                 'backgroundColor': {
                     'red': 0.9,
                     'green': 0.9,
@@ -233,11 +227,20 @@ def sync_table2():
         # עדכון הגיליון בפעולה אחת
         if len(headers) <= 26:  # A-Z
             end_col = chr(ord('A') + len(headers) - 1)
-        else:  # יותר מ-26 עמודות
-            end_col = 'Z'
+        else:  # יותר מ-26 עמודות - חישוב נכון עבור AA, AB וכו'
+            if len(headers) <= 702:  # עד ZZ
+                if len(headers) <= 26:
+                    end_col = chr(ord('A') + len(headers) - 1)
+                else:
+                    first_letter = chr(ord('A') + (len(headers) - 27) // 26)
+                    second_letter = chr(ord('A') + (len(headers) - 27) % 26)
+                    end_col = first_letter + second_letter
+            else:
+                end_col = 'ZZ'  # מגבלה מקסימלית
         
         end_row = len(all_data)
-        sheet.update(f'A1:{end_col}{end_row}', all_data)
+        range_to_update = f'A1:{end_col}{end_row}'
+        sheet.update(range_to_update, all_data)
         
         logger.info(f"✅ Updated CampaignsFullData sheet with {len(rows)} rows in single operation")
         
